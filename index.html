@@ -1,1 +1,181 @@
 
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FIFO Module Scanner</title>
+
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f1f3f5;
+      padding: 15px;
+      text-align: center;
+    }
+
+    .container {
+      background: white;
+      padding: 20px;
+      border-radius: 14px;
+      max-width: 450px;
+      margin: auto;
+    }
+
+    h2 { color: #263238; }
+
+    #mode {
+      font-size: 25px;
+      font-weight: bold;
+      margin: 20px;
+    }
+
+    #reader {
+      width: 100%;
+      margin: auto;
+    }
+
+    input, button {
+      width: 100%;
+      padding: 14px;
+      margin-top: 12px;
+      box-sizing: border-box;
+      font-size: 16px;
+    }
+
+    button {
+      background: #1565c0;
+      color: white;
+      border: none;
+      border-radius: 8px;
+    }
+
+    #message {
+      margin-top: 18px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+
+<body>
+<div class="container">
+
+  <h2>FIFO MODULE SYSTEM</h2>
+
+  <div id="mode"></div>
+
+  <div id="reader"></div>
+
+  <p id="qrResult">QR belum discan</p>
+
+  <input id="operator" placeholder="Masukkan Operator ID">
+
+  <button onclick="submitData()">SUBMIT</button>
+
+  <button onclick="startScanner()">SCAN SEMULA</button>
+
+  <div id="message"></div>
+
+</div>
+
+<script>
+  // GANTIKAN DENGAN URL WEB APP KAU
+  const APPS_SCRIPT_URL =
+    "https://script.google.com/macros/s/AKfycbwzZnVTDSACH3IKPqlckb-0U3P_p0x6Z83uGN6bTmgo0otuPKjHpc3725EXwLoIJuErPg/exec";
+
+  const params = new URLSearchParams(location.search);
+  const mode = (params.get("mode") || "").toUpperCase();
+
+  let scannedQR = "";
+  let scanner = null;
+
+  document.getElementById("mode").innerText =
+    mode === "IN" ? "MODULE IN" :
+    mode === "OUT" ? "MODULE OUT" :
+    "INVALID LINK";
+
+  function startScanner() {
+    if (mode !== "IN" && mode !== "OUT") return;
+
+    if (!scanner) {
+      scanner = new Html5Qrcode("reader");
+    }
+
+    scanner.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: 250 },
+      async (decodedText) => {
+        scannedQR = decodedText;
+
+        document.getElementById("qrResult").innerText =
+          "QR: " + scannedQR;
+
+        document.getElementById("message").innerText =
+          "QR berjaya dibaca. Masukkan Operator ID.";
+
+        await scanner.stop();
+      }
+    ).catch(error => {
+      document.getElementById("message").innerText =
+        "Kamera gagal dibuka: " + error;
+    });
+  }
+
+  function submitData() {
+    const operator =
+      document.getElementById("operator").value.trim();
+
+    if (!scannedQR || !operator) {
+      document.getElementById("message").innerText =
+        "Sila scan QR dan isi Operator ID.";
+      return;
+    }
+
+    if (APPS_SCRIPT_URL.indexOf("/exec") === -1) {
+      document.getElementById("message").innerText =
+        "URL Apps Script belum dimasukkan.";
+      return;
+    }
+
+    document.getElementById("message").innerText =
+      "Sedang menghantar transaksi...";
+
+    window.fifoResult = function(result) {
+      document.getElementById("message").innerText =
+        result.ok ? result.message : "GAGAL: " + result.message;
+
+      if (result.ok) {
+        scannedQR = "";
+        document.getElementById("qrResult").innerText =
+          "QR belum discan";
+        document.getElementById("operator").value = "";
+      }
+    };
+
+    const query = new URLSearchParams({
+      api: "1",
+      callback: "fifoResult",
+      qrText: scannedQR,
+      operator: operator,
+      mode: mode
+    });
+
+    const script = document.createElement("script");
+    script.src = APPS_SCRIPT_URL + "?" + query.toString();
+
+    script.onerror = function() {
+      document.getElementById("message").innerText =
+        "Gagal menghubungi Apps Script.";
+    };
+
+    document.body.appendChild(script);
+  }
+
+  if (mode === "IN" || mode === "OUT") {
+    startScanner();
+  }
+</script>
+
+</body>
+</html>
